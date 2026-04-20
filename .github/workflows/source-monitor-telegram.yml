@@ -1,0 +1,76 @@
+name: Source Monitor Telegram
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Tránh đúng phút 00 để giảm nguy cơ trễ do tải cao đầu giờ
+    - cron: "19 * * * *"
+
+concurrency:
+  group: source-monitor-telegram
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Validate required secrets
+        id: preflight
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          missing=0
+          if [ -z "$TG_BOT_TOKEN" ]; then
+            echo "::warning::Missing secret TG_BOT_TOKEN"
+            missing=1
+          fi
+          if [ -z "$TG_CHAT_ID" ]; then
+            echo "::warning::Missing secret TG_CHAT_ID"
+            missing=1
+          fi
+
+          if [ "$missing" -eq 1 ]; then
+            echo "can_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run monitor and send telegram
+        if: steps.preflight.outputs.can_run == 'true'
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          FETCH_PROXY_BASE: ${{ secrets.FETCH_PROXY_BASE }}
+        run: |
+          attempts=0
+          until [ "$attempts" -ge 3 ]; do
+            node scripts/source-monitor-telegram.js --mode=report && exit 0
+            attempts=$((attempts + 1))
+            if [ "$attempts" -lt 3 ]; then
+              echo "Attempt ${attempts} failed, retrying in 10s..."
+              sleep 10
+            fi
+          done
+          echo "::error::Monitor failed after 3 attempts."
+          exit 1
+
+      - name: Skip monitor (missing secrets)
+        if: steps.preflight.outputs.can_run != 'true'
+        run: echo "Monitor skipped because required Telegram secrets are missing."
