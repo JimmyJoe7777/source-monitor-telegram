@@ -158,7 +158,7 @@ async def run_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     command_token = get_first_command_token(update.message.text) or "/run"
-    await update.message.reply_text(f"Da nhan lenh {command_token}\nDang chay source monitor...")
+    await update.message.reply_text(f"Đã nhận lệnh {command_token}\nĐang chạy source monitor...")
 
     ok, detail = await dispatch_workflow(f"telegram_command {command_token}")
     if not ok:
