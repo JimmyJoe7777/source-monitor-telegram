@@ -18,6 +18,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FETCH_PROXY_BASE: ${{ secrets.FETCH_PROXY_BASE }}
 
 jobs:
   monitor:
@@ -34,6 +35,32 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: "24"
+
+      - name: Setup Python for local proxy
+        if: ${{ secrets.FETCH_PROXY_BASE == '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Start local fetch proxy
+        if: ${{ secrets.FETCH_PROXY_BASE == '' }}
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install cloudscraper
+          nohup python3 plugin-dev-kit/local_fetch_proxy.py --port 8787 > /tmp/local_fetch_proxy.log 2>&1 &
+
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8787/health > /dev/null; then
+              echo "FETCH_PROXY_BASE=http://127.0.0.1:8787" >> "$GITHUB_ENV"
+              echo "Local fetch proxy is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::Local fetch proxy failed to start."
+          tail -n 100 /tmp/local_fetch_proxy.log || true
+          exit 1
 
       - name: Validate required secrets
         id: preflight
@@ -63,7 +90,6 @@ jobs:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
-          FETCH_PROXY_BASE: ${{ secrets.FETCH_PROXY_BASE }}
           MONITOR_TRIGGER_TEXT: ${{ github.event.inputs.trigger_text }}
         run: |
           attempts=0

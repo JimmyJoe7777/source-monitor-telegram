@@ -385,7 +385,9 @@ async function runHealthCheck(plugin) {
         lastError = "";
         break;
       } else {
-        lastError = `${candidate.sample.title}: ${res.reason || "resolve_fail"}`;
+        const reason = res.reason || "resolve_fail";
+        const detail = res.error ? `${reason} (${String(res.error)})` : reason;
+        lastError = `${candidate.sample.title}: ${detail}`;
       }
     }
 
@@ -614,7 +616,7 @@ async function main() {
       return;
     }
 
-    await sendTelegramMessage(`<b>Da nhan lenh ${escapeHtml(commandUpdate.command)}</b>\nDang chay source monitor...`);
+    await sendTelegramMessage(`<b>Đã nhận lệnh ${escapeHtml(commandUpdate.command)}</b>\nĐang chạy source monitor...`);
     await executeAndSendReport(plugin, `telegram_command ${commandUpdate.command}`);
     return;
   }
