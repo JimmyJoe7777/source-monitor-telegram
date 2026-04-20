@@ -37,13 +37,13 @@ jobs:
           node-version: "24"
 
       - name: Setup Python for local proxy
-        if: ${{ secrets.FETCH_PROXY_BASE == '' }}
+        if: ${{ env.FETCH_PROXY_BASE == '' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Start local fetch proxy
-        if: ${{ secrets.FETCH_PROXY_BASE == '' }}
+        if: ${{ env.FETCH_PROXY_BASE == '' }}
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install cloudscraper
