@@ -1,26 +1,20 @@
-name: Source Monitor Telegram
+name: Source Monitor Telegram Command Poll
 
 on:
   workflow_dispatch:
-    inputs:
-      trigger_text:
-        description: Trigger text included in Telegram report
-        required: false
-        type: string
-        default: scheduled_or_manual
   schedule:
-    # Tránh đúng phút 00 để giảm nguy cơ trễ do tải cao đầu giờ
-    - cron: "19 * * * *"
+    # GitHub Actions cho phép tối thiểu 5 phút/lần
+    - cron: "2-59/5 * * * *"
 
 concurrency:
-  group: source-monitor-telegram
+  group: source-monitor-telegram-command
   cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  monitor:
+  poll-command:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -57,27 +51,28 @@ jobs:
             echo "can_run=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run monitor and send telegram
+      - name: Poll telegram command and run report if needed
         if: steps.preflight.outputs.can_run == 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           TG_THREAD_ID: ${{ secrets.TG_THREAD_ID }}
+          TG_RUN_COMMANDS: ${{ secrets.TG_RUN_COMMANDS }}
+          TG_AUTO_DELETE_WEBHOOK: ${{ secrets.TG_AUTO_DELETE_WEBHOOK }}
           FETCH_PROXY_BASE: ${{ secrets.FETCH_PROXY_BASE }}
-          MONITOR_TRIGGER_TEXT: ${{ github.event.inputs.trigger_text }}
         run: |
           attempts=0
           until [ "$attempts" -ge 3 ]; do
-            node scripts/source-monitor-telegram.js --mode=report && exit 0
+            node scripts/source-monitor-telegram.js --mode=command-poll && exit 0
             attempts=$((attempts + 1))
             if [ "$attempts" -lt 3 ]; then
               echo "Attempt ${attempts} failed, retrying in 10s..."
               sleep 10
             fi
           done
-          echo "::error::Monitor failed after 3 attempts."
+          echo "::error::Command poll failed after 3 attempts."
           exit 1
 
-      - name: Skip monitor (missing secrets)
+      - name: Skip poll (missing secrets)
         if: steps.preflight.outputs.can_run != 'true'
-        run: echo "Monitor skipped because required Telegram secrets are missing."
+        run: echo "Command poll skipped because required Telegram secrets are missing."

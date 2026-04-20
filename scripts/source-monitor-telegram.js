@@ -125,6 +125,11 @@ function getMode() {
   return mode || "report";
 }
 
+function getReportTriggerText() {
+  const raw = String(process.env.MONITOR_TRIGGER_TEXT || "").trim();
+  return raw || "scheduled_or_manual";
+}
+
 function getRunCommands() {
   const raw = String(process.env.TG_RUN_COMMANDS || "").trim();
   if (!raw) return DEFAULT_RUN_COMMANDS;
@@ -618,7 +623,7 @@ async function main() {
     throw new Error(`Unsupported MONITOR_MODE: ${mode}`);
   }
 
-  await executeAndSendReport(plugin, "scheduled_or_manual");
+  await executeAndSendReport(plugin, getReportTriggerText());
 }
 
 main().catch(async (err) => {

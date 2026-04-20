@@ -69,7 +69,20 @@ def is_chat_allowed(chat_id: int) -> bool:
     return chat_id in SETTINGS.allowed_chat_ids
 
 
-async def dispatch_workflow() -> tuple[bool, str]:
+def get_first_command_token(text: str) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+
+    first = raw.split()[0].lower()
+    if not first.startswith("/"):
+        return ""
+
+    at_idx = first.find("@")
+    return first if at_idx == -1 else first[:at_idx]
+
+
+async def dispatch_workflow(trigger_text: str | None = None) -> tuple[bool, str]:
     if not SETTINGS.gh_owner or not SETTINGS.gh_repo or not SETTINGS.gh_token:
         return False, "Missing GH_OWNER/GH_REPO/GH_TOKEN in env."
 
@@ -83,6 +96,8 @@ async def dispatch_workflow() -> tuple[bool, str]:
         "X-GitHub-Api-Version": "2022-11-28",
     }
     payload = {"ref": SETTINGS.gh_ref}
+    if trigger_text:
+        payload["inputs"] = {"trigger_text": trigger_text}
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -142,16 +157,11 @@ async def run_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Chat nay khong duoc phep su dung bot.")
         return
 
-    await update.message.reply_text("Da nhan lenh. Dang kich hoat workflow monitor...")
+    command_token = get_first_command_token(update.message.text) or "/run"
+    await update.message.reply_text(f"Da nhan lenh {command_token}\nDang chay source monitor...")
 
-    ok, detail = await dispatch_workflow()
-    if ok:
-        await update.message.reply_text(
-            "Da trigger monitor thanh cong.\n"
-            f"Theo doi tai: {SETTINGS.workflow_page}",
-            disable_web_page_preview=True,
-        )
-    else:
+    ok, detail = await dispatch_workflow(f"telegram_command {command_token}")
+    if not ok:
         await update.message.reply_text("Trigger that bai:\n" + detail)
 
 
